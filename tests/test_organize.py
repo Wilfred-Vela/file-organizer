@@ -226,6 +226,13 @@ class TestR8Summary(OrganizerTestCase):
         self.assertEqual(len(result.failed), 1)
         self.assertIn("a.txt", organize.format_summary(result))
 
+    def test_R8_main_exits_1_when_a_move_fails(self):
+        touch(self.dir, "a.txt")
+        with unittest.mock.patch("organize.os.rename", side_effect=PermissionError("denied")):
+            code, out, _ = run_main(str(self.dir))
+        self.assertEqual(code, 1)
+        self.assertIn("Failed: 1", out)
+
 
 class TestR9InvalidPath(OrganizerTestCase):
     def test_R9_nonexistent_path_shows_helpful_error(self):

@@ -10,7 +10,8 @@ behavior needed to implement and test each one.
 python3 organize.py <folder>
 ```
 
-- Exit code `0` on success, `2` on a usage error or invalid folder.
+- Exit code `0` on success, `1` if any individual move failed, `2` on a usage
+  error or invalid folder.
 - Python 3 standard library only. No network, accounts, API keys, or installs.
 
 ## Requirements and behavior
