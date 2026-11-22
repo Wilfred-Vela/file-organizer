@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Sort the files at the top level of a folder into subfolders by file type.
 
-Usage: python3 organize.py <folder>
+Usage: python3 organize.py [--dry-run] <folder>
 
-Logic (categorize, plan_moves, organize, format_summary) is kept separate
+Logic (categorize, plan_moves, organize, preview, format_summary) is kept separate
 from input/output (main) so it can be tested directly.
 """
 
@@ -42,6 +42,8 @@ class Result:
     moved: dict = field(default_factory=dict)    # category -> [new file names]
     skipped: list = field(default_factory=list)  # names left in place on purpose
     failed: list = field(default_factory=list)   # (name, error message)
+    dry_run: bool = False
+    planned: list = field(default_factory=list)  # (name, "Category/new name")
 
     @property
     def total(self):
@@ -94,15 +96,17 @@ def skipped_entries(folder):
     )
 
 
-def unique_destination(directory, name):
+def unique_destination(directory, name, claimed=()):
     """Return a path in directory for name that does not exist yet.
 
     photo.jpg -> photo.jpg, photo (1).jpg, photo (2).jpg, ...
+    Paths in claimed are treated as taken (used by preview, where earlier
+    planned moves have not actually happened).
     """
     candidate = directory / name
     stem, suffix = os.path.splitext(name)
     n = 1
-    while candidate.exists() or candidate.is_symlink():
+    while candidate.exists() or candidate.is_symlink() or candidate in claimed:
         candidate = directory / f"{stem} ({n}){suffix}"
         n += 1
     return candidate
@@ -127,39 +131,64 @@ def organize(folder):
     return result
 
 
+def preview(folder):
+    """Plan the moves organize() would make, without changing anything (R11)."""
+    folder = Path(folder)
+    result = Result(skipped=skipped_entries(folder), dry_run=True)
+    claimed = set()
+    for source, category in plan_moves(folder):
+        target_dir = folder / category
+        if target_dir.exists() and not target_dir.is_dir():
+            result.failed.append(
+                (source.name, f"'{category}' exists and is not a folder"))
+            continue
+        destination = unique_destination(target_dir, source.name, claimed)
+        claimed.add(destination)
+        result.moved.setdefault(category, []).append(destination.name)
+        result.planned.append((source.name, f"{category}/{destination.name}"))
+    return result
+
+
 def format_summary(result):
-    """Return a human-readable summary of an organize() result (R8)."""
+    """Return a human-readable summary of an organize() or preview() result (R8, R11)."""
     lines = []
+    if result.dry_run:
+        lines.append("Dry run: nothing was moved.")
+        for name, destination in result.planned:
+            lines.append(f"  {name} -> {destination}")
     if result.total == 0:
         lines.append("No files to organize.")
     else:
-        lines.append("Organized files:")
+        lines.append("Would organize:" if result.dry_run else "Organized files:")
         for category in sorted(result.moved):
             lines.append(f"  {category}: {len(result.moved[category])}")
         lines.append(f"Total: {result.total}")
     if result.skipped:
         lines.append(f"Skipped: {len(result.skipped)} (hidden files or links)")
     if result.failed:
-        lines.append(f"Failed: {len(result.failed)}")
+        lines.append(f"{'Would fail' if result.dry_run else 'Failed'}: {len(result.failed)}")
         for name, message in result.failed:
             lines.append(f"  {name}: {message}")
     return "\n".join(lines)
 
 
-USAGE = "usage: python3 organize.py <folder>"
+USAGE = "usage: python3 organize.py [--dry-run] <folder>"
+DRY_RUN = "--dry-run"
 
 
 def main(argv):
-    if len(argv) != 1:
+    dry_run = DRY_RUN in argv
+    args = [a for a in argv if a != DRY_RUN]
+    if len(args) != 1 or args[0].startswith("--") or argv.count(DRY_RUN) > 1:
         print(USAGE, file=sys.stderr)
         return 2
     try:
-        folder = validate_folder(argv[0])
+        folder = validate_folder(args[0])
     except InvalidFolderError as exc:
         print(exc, file=sys.stderr)
         print("Please provide the path to an existing folder.", file=sys.stderr)
         return 2
-    result = organize(folder)
+    result = preview(folder) if dry_run else organize(folder)
     print(format_summary(result))
     return 1 if result.failed else 0
 
