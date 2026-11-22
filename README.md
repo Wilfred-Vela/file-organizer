@@ -31,6 +31,19 @@ Organized files:
 Total: 16
 ```
 
+Preview first without moving anything:
+
+```
+$ python3 organize.py --dry-run ~/Downloads
+Dry run: nothing was moved.
+  photo.jpg -> Images/photo.jpg
+  report.pdf -> Documents/report (1).pdf
+Would organize:
+  Documents: 1
+  Images: 1
+Total: 2
+```
+
 Exit codes: `0` success, `1` some files could not be moved, `2` bad arguments
 or the path is not an existing folder.
 
@@ -44,6 +57,6 @@ Tests create and clean up their own temporary folders.
 
 ## More
 
-- `problem.md` — the problem and requirements R1–R10
+- `problem.md` — the problem and requirements R1–R11
 - `spec.md` — exact behavior, including the full extension table
 - `docs/decisions/` — design decisions
