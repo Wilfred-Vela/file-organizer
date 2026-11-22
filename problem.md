@@ -12,3 +12,6 @@ People who regularly download or create files often end up with cluttered folder
 - R8: The program must display a summary of the files it organized.
 - R9: The program must handle invalid folder paths and display a helpful error message.
 - R10: The program must not organize files inside subfolders.
+
+# Additional requirements
+- R11: The user must be able to add a --dry-run option that shows which files would be moved and where, without moving anything.
