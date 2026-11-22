@@ -269,5 +269,80 @@ class TestR10NoSubfolders(OrganizerTestCase):
         self.assertFalse((self.dir / "Images").exists())
 
 
+class TestR11DryRun(OrganizerTestCase):
+    def snapshot(self):
+        return sorted(str(p.relative_to(self.dir)) for p in self.dir.rglob("*"))
+
+    def test_R11_dry_run_moves_nothing_and_creates_no_folders(self):
+        touch(self.dir, "a.jpg", "b.pdf", "README", "sub/inner.png")
+        before = self.snapshot()
+        code, _, _ = run_main("--dry-run", str(self.dir))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_R11_dry_run_lists_each_file_and_destination(self):
+        touch(self.dir, "a.jpg", "b.pdf", "README")
+        code, out, _ = run_main("--dry-run", str(self.dir))
+        self.assertEqual(code, 0)
+        self.assertIn("a.jpg -> Images/a.jpg", out)
+        self.assertIn("b.pdf -> Documents/b.pdf", out)
+        self.assertIn("README -> No Extension/README", out)
+        self.assertIn("dry run", out.lower())
+        self.assertIn("Total: 3", out)
+
+    def test_R11_dry_run_shows_collision_rename(self):
+        touch(self.dir, "Images/photo.jpg", "photo.jpg")
+        _, out, _ = run_main("--dry-run", str(self.dir))
+        self.assertIn("photo.jpg -> Images/photo (1).jpg", out)
+
+    def test_R11_dry_run_matches_real_run(self):
+        # "photo (1).jpg" collides with the rename chosen for "photo.jpg".
+        touch(self.dir, "Images/photo.jpg", "photo.jpg", "photo (1).jpg", "x.txt")
+        preview = organize.preview(self.dir)
+        result = organize.organize(self.dir)
+        self.assertEqual(preview.moved, result.moved)
+        self.assertEqual(len(preview.planned), 3)
+
+    def test_R11_dry_run_flag_may_follow_folder(self):
+        touch(self.dir, "a.jpg")
+        code, out, _ = run_main(str(self.dir), "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertIn("a.jpg -> Images/a.jpg", out)
+        self.assertTrue((self.dir / "a.jpg").is_file())
+
+    def test_R11_dry_run_with_nothing_to_organize(self):
+        code, out, _ = run_main("--dry-run", str(self.dir))
+        self.assertEqual(code, 0)
+        self.assertIn("No files to organize", out)
+
+    def test_R11_dry_run_without_folder_is_usage_error(self):
+        code, _, err = run_main("--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("usage", err.lower())
+
+    def test_R11_unknown_option_is_usage_error(self):
+        touch(self.dir, "a.jpg")
+        code, _, err = run_main("--dryrun", str(self.dir))
+        self.assertEqual(code, 2)
+        self.assertIn("usage", err.lower())
+        self.assertTrue((self.dir / "a.jpg").is_file())
+
+    def test_R11_dry_run_invalid_folder_shows_error(self):
+        code, _, err = run_main("--dry-run", str(self.dir / "nope"))
+        self.assertEqual(code, 2)
+        self.assertIn("does not exist", err)
+
+    def test_R11_dry_run_from_command_line(self):
+        touch(self.dir, "a.mp3")
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "organize.py"), "--dry-run", str(self.dir)],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("a.mp3 -> Audio/a.mp3", result.stdout)
+        self.assertTrue((self.dir / "a.mp3").is_file())
+        self.assertFalse((self.dir / "Audio").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
